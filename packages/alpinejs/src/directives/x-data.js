@@ -1,12 +1,13 @@
 import { directive, prefix } from '../directives'
 import { initInterceptors } from '../interceptor'
 import { injectDataProviders } from '../datas'
-import { addRootSelector } from '../lifecycle'
+import { addRootSelector, initTree, destroyTree } from '../lifecycle'
 import { interceptClone, isCloning, isCloningLegacy } from '../clone'
 import { addScopeToNode } from '../scope'
 import { injectMagics, magic } from '../magics'
 import { reactive } from '../reactivity'
 import { evaluate } from '../evaluator'
+import { cleanupElement, cleanupAttributes } from '../mutation'
 
 addRootSelector(() => `[${prefix('data')}]`)
 
@@ -39,6 +40,19 @@ directive('data', ((el, { expression }, { cleanup }) => {
         reactiveData['destroy'] && evaluate(el, reactiveData['destroy'])
 
         undo()
+        
+        // Destroy all direct children (and their subtrees)
+        Array.from(el.children).forEach(child => destroyTree(child))
+        
+        // Clean up other attributes on el (not x-data to avoid recursion)
+        if (el._x_attributeCleanups) {
+            Object.keys(el._x_attributeCleanups)
+                .filter(name => name !== `${prefix('data')}`)
+                .forEach(name => cleanupAttributes(el, [name]))
+        }
+        
+        delete el._x_marker
+        initTree(el)
     })
 }))
 
