@@ -1132,3 +1132,53 @@ test('can morph child element containing x-ref without crashing',
         get('input').should(haveFocus())
     },
 )
+
+test('can morph x-data attribute value and re-initialize scope',
+    [html`
+        <div x-data="{ count: 1 }">
+            <span x-text="count"></span>
+        </div>
+    `],
+    ({ get }, reload, window, document) => {
+        let toHtml = html`
+            <div x-data="{ count: 999 }">
+                <span x-text="count"></span>
+            </div>
+        `
+
+        get('span').should(haveText('1'))
+
+        get('div').then(([el]) => window.Alpine.morph(el, toHtml))
+
+        get('span').should(haveText('999'))
+    },
+)
+
+test('can morph x-data with x-for and re-initialize',
+    [html`
+        <div x-data="{ items: ['a'] }">
+            <template x-for="item in items">
+                <span x-text="item"></span>
+            </template>
+        </div>
+    `],
+    ({ get }, reload, window, document) => {
+        let toHtml = html`
+            <div x-data="{ items: ['x', 'y', 'z'] }">
+                <template x-for="item in items">
+                    <span x-text="item"></span>
+                </template>
+            </div>
+        `
+
+        get('span').should('have.length', 1)
+        get('span').should(haveText('a'))
+
+        get('div').then(([el]) => window.Alpine.morph(el, toHtml))
+
+        get('span').should('have.length', 3)
+        get('span:nth-of-type(1)').should(haveText('x'))
+        get('span:nth-of-type(2)').should(haveText('y'))
+        get('span:nth-of-type(3)').should(haveText('z'))
+    },
+)

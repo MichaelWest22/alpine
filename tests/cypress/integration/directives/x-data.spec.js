@@ -124,3 +124,30 @@ test('x-data getters have access to parent scope',
     `,
     ({ get }) => get('h1').should(haveText('bar'))
 )
+
+test('x-for updates when x-data errors array changes via setAttribute',
+    [html`
+        <div id="target" x-data="{ errors: [''] }">
+            <input type="text">
+            <ul>
+                <template x-for="error in errors">
+                    <li x-text="error"></li>
+                </template>
+            </ul>
+        </div>
+    `,
+    `
+        return new Promise(resolve => {
+            document.addEventListener('alpine:initialized', () => {
+                const target = document.getElementById('target')
+                target.setAttribute('x-data', "{ errors: ['field is required', 'too short'] }")
+                setTimeout(resolve, 50)
+            })
+        })
+    `],
+    ({ get }) => {
+        get('li').should('have.length', 2)
+        get('li:nth-of-type(1)').should(haveText('field is required'))
+        get('li:nth-of-type(2)').should(haveText('too short'))
+    }
+)
