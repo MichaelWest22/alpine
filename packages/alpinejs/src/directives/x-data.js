@@ -7,7 +7,7 @@ import { addScopeToNode } from '../scope'
 import { injectMagics, magic } from '../magics'
 import { reactive } from '../reactivity'
 import { evaluate } from '../evaluator'
-import { cleanupElement, cleanupAttributes } from '../mutation'
+import { cleanupAttributes, mutateDom } from '../mutation'
 
 addRootSelector(() => `[${prefix('data')}]`)
 
@@ -52,7 +52,7 @@ directive('data', ((el, { expression }, { cleanup }) => {
         }
         
         delete el._x_marker
-        initTree(el)
+        mutateDom(() => initTree(el))
     })
 }))
 
