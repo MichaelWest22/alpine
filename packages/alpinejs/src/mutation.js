@@ -2,6 +2,7 @@ import { dequeueJob } from "./scheduler";
 let onAttributeAddeds = []
 let onElRemoveds = []
 let onElAddeds = []
+let onAttributeChangeds = []
 
 export function onElAdded(callback) {
     onElAddeds.push(callback)
@@ -19,6 +20,10 @@ export function onElRemoved(el, callback) {
 
 export function onAttributesAdded(callback) {
     onAttributeAddeds.push(callback)
+}
+
+export function onAttributeChanged(callback) {
+    onAttributeChangeds.push(callback)
 }
 
 export function onAttributeRemoved(el, name, callback) {
@@ -122,6 +127,7 @@ function onMutate(mutations) {
     let removedNodes = new Set
     let addedAttributes = new Map
     let removedAttributes = new Map
+    let changedAttributes = new Map
 
     for (let i = 0; i < mutations.length; i++) {
         if (mutations[i].target._x_ignoreMutationObserver) continue
@@ -170,6 +176,12 @@ function onMutate(mutations) {
                 removedAttributes.get(el).push(name)
             }
 
+            let change = () => {
+                if (! changedAttributes.has(el)) changedAttributes.set(el, [])
+
+                changedAttributes.get(el).push({ name, oldValue, value: el.getAttribute(name) })
+            }
+
             // New attribute.
             if (el.hasAttribute(name) && oldValue === null) {
                 add()
@@ -177,6 +189,7 @@ function onMutate(mutations) {
             } else if (el.hasAttribute(name)) {
                 remove()
                 add()
+                change()
             // Removed attribute.
             } else {
                 remove()
@@ -186,6 +199,10 @@ function onMutate(mutations) {
 
     removedAttributes.forEach((attrs, el) => {
         cleanupAttributes(el, attrs)
+    })
+
+    changedAttributes.forEach((attrs, el) => {
+        onAttributeChangeds.forEach(i => i(el, attrs))
     })
 
     addedAttributes.forEach((attrs, el) => {
@@ -217,4 +234,5 @@ function onMutate(mutations) {
     removedNodes = null
     addedAttributes = null
     removedAttributes = null
+    changedAttributes = null
 }

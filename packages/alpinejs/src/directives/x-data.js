@@ -7,6 +7,9 @@ import { addScopeToNode } from '../scope'
 import { injectMagics, magic } from '../magics'
 import { reactive } from '../reactivity'
 import { evaluate } from '../evaluator'
+import { onAttributeChanged, mutateDom } from '../mutation'
+import { cleanupElement, cleanupAttributes } from '../mutation'
+import { initTree } from '../lifecycle'
 
 addRootSelector(() => `[${prefix('data')}]`)
 
@@ -41,6 +44,34 @@ directive('data', ((el, { expression }, { cleanup }) => {
         undo()
     })
 }))
+
+// Handle x-data attribute value changes (e.g., during morphing)
+onAttributeChanged((el, attrs) => {
+    attrs.forEach(({ name, oldValue, value }) => {
+        if (name !== `${prefix('data')}`) return
+        // Check if this is a value change (not just add/remove)
+        if (!oldValue || oldValue === value) return
+
+        // Destroy the entire subtree (cleans up all directives and effects)
+        el.querySelectorAll('*').forEach(child => {
+            cleanupElement(child)
+            cleanupAttributes(child)
+            delete child._x_marker
+        })
+        
+        // Clean up the element itself
+        cleanupElement(el)
+        cleanupAttributes(el)
+        delete el._x_marker
+        delete el._x_dataStack
+
+        // Re-initialize the entire tree (will re-run all directives including x-for)
+        // Wrap in mutateDom to prevent re-entrant mutation observer calls
+        mutateDom(() => {
+            initTree(el)
+        })
+    })
+})
 
 interceptClone((from, to) => {
     // Transfer over existing runtime Alpine state from
