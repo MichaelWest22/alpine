@@ -1,18 +1,20 @@
 import { directive, prefix } from '../directives'
 import { initInterceptors } from '../interceptor'
 import { injectDataProviders } from '../datas'
-import { addRootSelector, initTree, destroyTree } from '../lifecycle'
+import { addRootSelector, destroyTree, initTree } from '../lifecycle'
 import { interceptClone, isCloning, isCloningLegacy } from '../clone'
-import { addScopeToNode } from '../scope'
+import { addScopeToNode, closestDataStack } from '../scope'
 import { injectMagics, magic } from '../magics'
 import { reactive } from '../reactivity'
 import { evaluate } from '../evaluator'
-import { cleanupAttributes, mutateDom } from '../mutation'
 
 addRootSelector(() => `[${prefix('data')}]`)
 
 directive('data', ((el, { expression }, { cleanup }) => {
     if (shouldSkipRegisteringDataDuringClone(el)) return
+    // If x-data attribute changed, the cleanup below merges new data onto the existing
+    // reactive state. Skip re-initialization here to prevent a duplicate scope being pushed.
+    if (el._x_dataStack) return
 
     expression = expression === '' ? '{}' : expression
 
@@ -34,26 +36,36 @@ directive('data', ((el, { expression }, { cleanup }) => {
 
     let undo = addScopeToNode(el, reactiveData)
 
+    if (el._x_childrenNeedInit) {
+        delete el._x_childrenNeedInit
+        Array.from(el.children).forEach(child => initTree(child))
+    }
+
     reactiveData['init'] && evaluate(el, reactiveData['init'])
 
     cleanup(() => {
         reactiveData['destroy'] && evaluate(el, reactiveData['destroy'])
 
-        undo()
-        
-        // Destroy all direct children (and their subtrees)
-        Array.from(el.children).forEach(child => destroyTree(child))
-        
-        // Clean up other attributes on el (not x-data to avoid recursion)
-        if (el._x_attributeCleanups) {
-            Object.keys(el._x_attributeCleanups)
-                .filter(name => name !== `${prefix('data')}`)
-                .forEach(name => cleanupAttributes(el, [name]))
+        // If x-data attribute changed (not removed), merge new data onto existing reactive state.
+        if (el.isConnected && el.hasAttribute(prefix('data'))) {
+            let newExpression = el.getAttribute(prefix('data')) || '{}'
+            let newData = evaluate(el, newExpression, { scope: dataProviderContext })
+            if (newData === undefined || newData === true) newData = {}
+            Object.keys(newData).forEach(key => { reactiveData[key] = newData[key] })
+        } else {
+            undo()
+            delete el._x_dataStack
+            Array.from(el.children).forEach(child => destroyTree(child))
+            // If an ancestor scope exists, re-init children against it now.
+            // Otherwise flag them for re-init when x-data is re-added.
+            if (el.parentElement && closestDataStack(el.parentElement).length) {
+                Array.from(el.children).forEach(child => initTree(child))
+            } else {
+                el._x_childrenNeedInit = true
+            }
         }
-        
-        delete el._x_marker
-        mutateDom(() => initTree(el))
     })
+
 }))
 
 interceptClone((from, to) => {
