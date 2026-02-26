@@ -28,6 +28,8 @@ directive('data', ((el, { expression }, { cleanup }) => {
 
     if (data === undefined || data === true) data = {}
 
+    let originalData = {...data}
+
     injectMagics(data, el)
 
     let reactiveData = reactive(data)
@@ -51,7 +53,10 @@ directive('data', ((el, { expression }, { cleanup }) => {
             let newExpression = el.getAttribute(prefix('data')) || '{}'
             let newData = evaluate(el, newExpression, { scope: dataProviderContext })
             if (newData === undefined || newData === true) newData = {}
-            Object.keys(newData).forEach(key => { reactiveData[key] = newData[key] })
+            // Only update keys the server actually changed; preserve client-mutated values.
+            Object.keys(newData).forEach(key => {
+                if (newData[key] !== originalData[key]) reactiveData[key] = newData[key]
+            })
         } else {
             undo()
             delete el._x_dataStack

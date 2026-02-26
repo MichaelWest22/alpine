@@ -220,3 +220,26 @@ test('removing child x-data falls back to parent scope',
         get('#shared').should(haveText('from-parent'))
     }
 )
+
+test('x-data setAttribute updates server key without resetting client-mutated key',
+    [html`
+        <div id="target" x-data="{ count: 1, open: false }">
+            <span id="count" x-text="count"></span>
+            <span id="open" x-text="open"></span>
+            <button @click="open = true">open</button>
+        </div>
+    `,
+    `
+        return new Promise(resolve => {
+            document.addEventListener('alpine:initialized', () => {
+                document.querySelector('button').click()
+                document.getElementById('target').setAttribute('x-data', '{ count: 99, open: false }')
+                setTimeout(resolve, 50)
+            })
+        })
+    `],
+    ({ get }) => {
+        get('#count').should(haveText('99'))
+        get('#open').should(haveText('true'))
+    }
+)
