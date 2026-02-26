@@ -51,10 +51,10 @@ directive('data', ((el, { expression }, { cleanup }) => {
         // x-data attribute still present means it changed, not removed — skip teardown.
         if (el.isConnected && el.hasAttribute(prefix('data'))) return
         reactiveData['destroy'] && evaluate(el, reactiveData['destroy'])
+
         undo()
         delete el._x_originalData
     })
-
 }))
 
 interceptClone((from, to) => {
