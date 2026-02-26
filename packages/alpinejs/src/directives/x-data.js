@@ -12,9 +12,6 @@ addRootSelector(() => `[${prefix('data')}]`)
 
 directive('data', ((el, { expression }, { cleanup }) => {
     if (shouldSkipRegisteringDataDuringClone(el)) return
-    // If x-data attribute changed, the cleanup below merges new data onto the existing
-    // reactive state. Skip re-initialization here to prevent a duplicate scope being pushed.
-    if (el._x_dataStack) return
 
     expression = expression === '' ? '{}' : expression
 
@@ -28,7 +25,17 @@ directive('data', ((el, { expression }, { cleanup }) => {
 
     if (data === undefined || data === true) data = {}
 
-    let originalData = {...data}
+    // If scope already exists, this is a re-run due to attribute change.
+    // Merge only keys the server changed; preserve client-mutated values.
+    if (el._x_originalData) {
+        Object.keys(data).forEach(key => {
+            if (data[key] !== el._x_originalData[key]) el._x_dataStack[0][key] = data[key]
+        })
+        el._x_originalData = {...data}
+        return
+    }
+
+    el._x_originalData = {...data}
 
     injectMagics(data, el)
 
@@ -47,27 +54,18 @@ directive('data', ((el, { expression }, { cleanup }) => {
 
     cleanup(() => {
         reactiveData['destroy'] && evaluate(el, reactiveData['destroy'])
-
-        // If x-data attribute changed (not removed), merge new data onto existing reactive state.
-        if (el.isConnected && el.hasAttribute(prefix('data'))) {
-            let newExpression = el.getAttribute(prefix('data')) || '{}'
-            let newData = evaluate(el, newExpression, { scope: dataProviderContext })
-            if (newData === undefined || newData === true) newData = {}
-            // Only update keys the server actually changed; preserve client-mutated values.
-            Object.keys(newData).forEach(key => {
-                if (newData[key] !== originalData[key]) reactiveData[key] = newData[key]
-            })
+        // x-data attribute still present means it changed, not removed — skip teardown.
+        if (el.isConnected && el.hasAttribute(prefix('data'))) return
+        undo()
+        delete el._x_dataStack
+        delete el._x_originalData
+        Array.from(el.children).forEach(child => destroyTree(child))
+        // If an ancestor scope exists, re-init children against it now.
+        // Otherwise flag them for re-init when x-data is re-added.
+        if (el.parentElement && closestDataStack(el.parentElement).length) {
+            Array.from(el.children).forEach(child => initTree(child))
         } else {
-            undo()
-            delete el._x_dataStack
-            Array.from(el.children).forEach(child => destroyTree(child))
-            // If an ancestor scope exists, re-init children against it now.
-            // Otherwise flag them for re-init when x-data is re-added.
-            if (el.parentElement && closestDataStack(el.parentElement).length) {
-                Array.from(el.children).forEach(child => initTree(child))
-            } else {
-                el._x_childrenNeedInit = true
-            }
+            el._x_childrenNeedInit = true
         }
     })
 
