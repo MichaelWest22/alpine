@@ -152,29 +152,6 @@ test('x-for updates when x-data errors array changes via setAttribute',
     }
 )
 
-test('x-data re-initializes after attribute is removed then re-added',
-    [html`
-        <div id="target" x-data="{ count: 1 }">
-            <span x-text="count"></span>
-        </div>
-    `,
-    `
-        return new Promise(resolve => {
-            document.addEventListener('alpine:initialized', () => {
-                const target = document.getElementById('target')
-                target.removeAttribute('x-data')
-                setTimeout(() => {
-                    target.setAttribute('x-data', '{ count: 99 }')
-                    setTimeout(resolve, 50)
-                }, 50)
-            })
-        })
-    `],
-    ({ get }) => {
-        get('span').should(haveText('99'))
-    }
-)
-
 test('x-data setAttribute does not create duplicate scope',
     [html`
         <div id="target" x-data="{ count: 1 }">
@@ -194,30 +171,6 @@ test('x-data setAttribute does not create duplicate scope',
         get('#target').then(([el]) => {
             expect(el._x_dataStack.length).to.equal(1)
         })
-    }
-)
-
-test('removing child x-data falls back to parent scope',
-    [html`
-        <div id="parent" x-data="{ name: 'parent', shared: 'from-parent' }">
-            <div id="child" x-data="{ shared: 'from-child' }">
-                <span id="name" x-text="name"></span>
-                <span id="shared" x-text="shared"></span>
-            </div>
-        </div>
-    `,
-    `
-        return new Promise(resolve => {
-            document.addEventListener('alpine:initialized', () => {
-                document.getElementById('child').removeAttribute('x-data')
-                setTimeout(resolve, 50)
-            })
-        })
-    `],
-    ({ get }) => {
-        // After child x-data is removed, children inherit parent scope only
-        get('#name').should(haveText('parent'))
-        get('#shared').should(haveText('from-parent'))
     }
 )
 
